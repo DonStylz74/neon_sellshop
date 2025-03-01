@@ -15,6 +15,18 @@ elseif Config.Framework == 'QBX' then
     Framework = exports.qbx_core
 end
 
+function SetRandomPrices(shop)
+    for item, data in pairs(shop.materials) do
+        if type(data.price) == "table" then
+            local randomPrice = math.random(data.price.min, data.price.max)
+            shop.materials[item].price = randomPrice
+        else
+            shop.materials[item].price = data.price
+        end
+    end
+end
+
+
 function SetupInteraction(shop)
     if Config.Interaction == 'target' then
         SetupTargetInteraction(shop)
@@ -29,21 +41,21 @@ function SetupTargetInteraction(shop)
     if targetFramework == 'ox_target' then
         exports.ox_target:addLocalEntity(shop.ped, {
             {
-                name = 'neon_sellshop',
-                icon = 'fa-solid fa-shop',
-                label = shop.targetLabel,
+                name = 'sell_items',
+                icon = 'fa-solid fa-coins',
+                label = 'Sell Items',
                 onSelect = function()
                     OpenSellMenu(shop)
                 end
             }
-        })
+        })             
     elseif targetFramework == 'qb-target' then
         exports['qb-target']:AddTargetEntity(shop.ped, {
             options = {
                 {
                     type = "client",
                     event = "neon_sellshop:sell",
-                    icon = 'fa-solid fa-shop',
+                    icon = 'fa-solid fa-coins',
                     label = shop.targetLabel
                 }
             },
@@ -54,37 +66,28 @@ end
 
 function SetupTextUIInteraction(shop)
     CreateThread(function()
-        local isShowingTextUI = false
-
         while true do
             local playerCoords = GetEntityCoords(PlayerPedId())
             local pedCoords = shop.pedCoords
             local dist = #(playerCoords - vector3(pedCoords.x, pedCoords.y, pedCoords.z))
 
-            if dist <= 1.5 then
-                if not isShowingTextUI then
-                    lib.showTextUI('[E] ' .. shop.targetLabel)
-                    isShowingTextUI = true
-                end
+            if dist <= 3.0 then
+                lib.showTextUI(shop.targetLabel)
 
                 if IsControlJustPressed(0, 38) then
                     OpenSellMenu(shop)
                 end
-
-                Wait(0)
             else
-                if isShowingTextUI then
-                    lib.hideTextUI()
-                    isShowingTextUI = false
-                end
-
-                Wait(500)
+                lib.hideTextUI()
             end
+            Wait(0)
         end
     end)
 end
 
 function CreateShop(shop)
+    SetRandomPrices(shop)
+
     local pedHash = GetHashKey(shop.pedModel)
     RequestModel(pedHash)
     while not HasModelLoaded(pedHash) do
@@ -111,29 +114,48 @@ function CreateShop(shop)
     SetupInteraction(shop)
 end
 
-RegisterNetEvent('neon_sellshop:receiveShopData', function(serverShops)
-    Config.Shops = serverShops
+CreateThread(function()
     for _, shop in pairs(Config.Shops) do
         CreateShop(shop)
     end
 end)
 
-CreateThread(function()
-    TriggerServerEvent('neon_sellshop:requestShopData')
+local Shops = {}
+
+RegisterNetEvent('neon_sellshop:receiveShopPrices', function(shop)
+    Shops[shop.label] = shop
+    ShowSellMenu(shop)
 end)
 
 function OpenSellMenu(shop)
+    if not shop or not shop.materials then
+        lib.notify({ type = 'error', description = 'Shop data is missing or incorrect!' })
+        return
+    end
+
+    TriggerServerEvent('neon_sellshop:requestShopPrices', shop.label)
+end
+
+function ShowSellMenu(shop)
+    if not shop or not shop.materials then
+        lib.notify({ type = 'error', description = 'Shop data is missing or incorrect!' })
+        return
+    end
+
     local elements = {}
     local playerInventory = GetPlayerInventory()
 
-    for item, data in pairs(shop.materials) do
+    for item, data in pairs(shop.materials or {}) do  
         local count = playerInventory[item] and playerInventory[item].count or 0
 
         if count > 0 then
-            local price = data.price
+            local price = data.price 
+
+            local itemIcon = ('nui://ox_inventory/web/images/%s.png'):format(item)
+
             table.insert(elements, {
                 title = data.name,
-                description = 'Total: ' .. count .. ' | Price: $' .. price,
+                description = ('Total: %s | Price: $%s'):format(count, price),
                 event = 'neon_sellshop:sell',
                 args = {
                     item = item,
@@ -141,20 +163,21 @@ function OpenSellMenu(shop)
                     price = price,
                     moneyType = shop.moneyType,
                     shopLabel = shop.label
-                }
+                },
+                icon = itemIcon
             })
         end
     end
 
     if #elements == 0 then
-        Notify('You don\'t have any materials to sell.', 'error')
+        lib.notify({ type = 'error', description = "You don't have any materials to sell." })
         return
     end
 
     lib.registerContext({
         id = 'sell_materials_menu',
         title = shop.label,
-        options = elements,
+        options = elements
     })
 
     lib.showContext('sell_materials_menu')
@@ -163,57 +186,17 @@ end
 function GetPlayerInventory()
     if Config.Inventory == 'OX' then
         return exports.ox_inventory:Items()
-    elseif Config.Inventory == 'QB' then
-        return GetQBInventory()
-    elseif Config.Inventory == 'PS' then
-        return GetPSInventory()
     end
-end
-
-function GetQBInventory()
-    local PlayerData = Framework.Functions.GetPlayerData()
-    local inventory = {}
-
-    for _, item in pairs(PlayerData.items) do
-        inventory[item.name] = { count = item.amount }
-    end
-
-    return inventory
-end
-
-function GetPSInventory()
-    local PlayerData = exports['ps-inventory']:getPlayerInventory()
-    local inventory = {}
-
-    for _, item in pairs(PlayerData) do
-        inventory[item.name] = { count = item.amount }
-    end
-
-    return inventory
 end
 
 function Notify(message, type)
-    if Config.Framework == 'ESX' then
-        ESX.ShowNotification(message)
-    elseif Config.Framework == 'QB' then
-        Framework.Functions.Notify(message, type)
-    elseif Config.Framework == 'QBX' then
-        exports.qbx_core:Notify(message, type)
-    end
+    lib.notify({ type = type, description = message })
 end
 
 RegisterNetEvent('neon_sellshop:sell', function(data)
-    local input = nil
-
-    if Config.InputType == 'input' then
-        input = lib.inputDialog('Sell Amount', {
-            { label = 'Enter amount to sell', type = 'input' }
-        })
-    elseif Config.InputType == 'slider' then
-        input = lib.inputDialog('Sell Amount', {
-            { label = 'Select amount to sell', type = 'slider', min = 1, max = data.count }
-        })
-    end
+    local input = lib.inputDialog('Sell Amount', {
+        { label = 'Select amount to sell', type = 'slider', min = 1, max = data.count }
+    })
 
     if not input or not tonumber(input[1]) then
         Notify('Invalid amount entered.', 'error')

@@ -3,9 +3,9 @@ game 'gta5'
 
 lua54 'yes'
 
-author 'Neon Scripts'
+author 'Custard Sellshop'
 description 'Sell Shop System'
-version '1.0.0'
+version '1.0.6'
 
 shared_scripts {
     '@ox_lib/init.lua',

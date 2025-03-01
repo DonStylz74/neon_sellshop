@@ -10,47 +10,6 @@ elseif Config.Framework == 'QBX' then
     Framework = exports.qbx_core
 end
 
-ServerShops = json.decode(json.encode(Config.Shops))
-
-function InitializeShopPrices()
-    for _, shop in pairs(ServerShops) do
-        for item, data in pairs(shop.materials) do
-            if type(data.price) == "table" then
-                shop.materials[item].price = math.random(data.price.min, data.price.max)
-            end
-        end
-    end
-end
-
-InitializeShopPrices()
-
-RegisterNetEvent('neon_sellshop:requestShopData', function()
-    local src = source
-    TriggerClientEvent('neon_sellshop:receiveShopData', src, ServerShops)
-end)
-
-RegisterNetEvent('neon_sellshop:syncShops', function(shopData)
-    for i, shop in ipairs(ServerShops) do
-        if shop.label == shopData.label then
-            ServerShops[i] = shopData
-            break
-        end
-    end
-end)
-
-local function GetItemPrice(shopLabel, item)
-    for _, shop in pairs(ServerShops) do
-        if shop.label == shopLabel then
-            if shop.materials[item] and type(shop.materials[item].price) == "number" then
-                return shop.materials[item].price
-            else
-                return nil
-            end
-        end
-    end
-    return nil
-end
-
 local function CheckPlayerInventory(src, item, amount)
     if Config.Framework == 'ESX' then
         local xPlayer = ESX.GetPlayerFromId(src)
@@ -64,6 +23,51 @@ local function CheckPlayerInventory(src, item, amount)
         return inventoryItem and inventoryItem.count >= amount
     end
 end
+
+function SetRandomPrices(shop)
+    for item, data in pairs(shop.materials) do
+        if type(data.price) == "table" then
+            shop.materials[item].price = math.random(data.price.min, data.price.max)
+        else
+            shop.materials[item].price = data.price
+        end
+    end
+end
+
+CreateThread(function()
+    for _, shop in pairs(Config.Shops) do
+        SetRandomPrices(shop)
+    end
+end)
+
+local function GetItemPrice(shopLabel, item)
+    for _, shop in pairs(Config.Shops) do
+        if shop.label == shopLabel then
+            if shop.materials[item] and shop.materials[item].price then
+                return shop.materials[item].price
+            end
+        end
+    end
+    return nil
+end
+
+RegisterNetEvent('neon_sellshop:requestShopPrices', function(shopLabel)
+    local src = source
+    local shopData = nil
+
+    for _, shop in pairs(Config.Shops) do
+        if shop.label == shopLabel then
+            shopData = shop
+            break
+        end
+    end
+
+    if shopData then
+        TriggerClientEvent('neon_sellshop:receiveShopPrices', src, shopData)
+    else
+        TriggerClientEvent('ox_lib:notify', src, { type = 'error', description = 'Shop data not found!' })
+    end
+end)
 
 RegisterNetEvent('neon_sellshop:sellMaterial', function(data)
     local src = source
@@ -119,8 +123,7 @@ RegisterNetEvent('neon_sellshop:sellMaterial', function(data)
             end
         end
 
-        local itemsSold = { data.item .. ": " .. data.amount .. " sold" }
-        SendDiscordLog(data.shopLabel, itemsSold, totalPrice, src)
+        SendDiscordLog(data.shopLabel, {{ name = data.item, amount = data.amount }}, totalPrice, src)
 
         TriggerClientEvent('ox_lib:notify', src, { type = 'success', description = 'You sold ' .. data.amount .. 'x ' .. data.item .. ' for $' .. totalPrice })
     else

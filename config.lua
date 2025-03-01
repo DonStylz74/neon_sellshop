@@ -1,10 +1,11 @@
 Config = {
     Version = true, -- This will print new updates in server console.
+    AmazingScripts = true, -- Using Amazing Scripts!
     Framework = 'QB', -- Options: 'QB', 'QBX' 'ESX'. Default is 'QB'.
-    Inventory = 'OX', -- 'OX', 'QB', or 'PS'
+    Inventory = 'OX', -- 'OX'
     Interaction = 'target', -- Options: 'target', 'textui'. Default is 'target'.
     Target = 'ox_target', -- Options: 'ox_target', 'qb-target'. Default is 'ox_target'.
-    DirtyMoneyItem = 'marked_bills', -- Set your dirty money item here
+    DirtyMoneyItem = 'dirtymoney', -- Set your dirty money item here
     InputType = 'slider', -- Options: 'input', 'slider'.
     Shops = {
         {
