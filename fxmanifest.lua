@@ -3,9 +3,9 @@ game 'gta5'
 
 lua54 'yes'
 
-author 'Custard Sellshop'
+author 'Neon Scripts'
 description 'Sell Shop System'
-version '1.0.6'
+version '1.0.1'
 
 shared_scripts {
     '@ox_lib/init.lua',
@@ -13,12 +13,12 @@ shared_scripts {
 }
 
 client_scripts {
-    'client/*'
+    'client/*.lua'
 }
 
 server_scripts {
     '@oxmysql/lib/MySQL.lua',
-    'server/*'
+    'server/*.lua'
 }
 
 
